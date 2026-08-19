@@ -2,12 +2,8 @@ import express from 'express';
 import {
   uploadNote,
   getNotes,
-  createTicket,
   getTickets,
-  updateTicketStatus,
-  createAppointment,
   getAppointments,
-  updateAppointmentStatus,
   getMessages,
   getUsers,
   getAnalytics
