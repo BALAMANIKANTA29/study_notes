@@ -11,18 +11,19 @@ import {
   cancelRequest,
   reassignRequest
 } from '../controllers/guidanceController.js';
+import { authorize } from '../middleware/authorize.js';
 
 const router = express.Router();
 
-router.post('/', createGuidanceRequest);
-router.get('/', getGuidanceRequests);
+router.post('/', authorize('student'), createGuidanceRequest);
+router.get('/', getGuidanceRequests); // All roles can GET (controller filters based on role)
 router.get('/:id', getGuidanceRequestById);
-router.put('/:id/accept', acceptRequest);
-router.put('/:id/reject', rejectRequest);
-router.put('/:id/schedule', scheduleRequest);
-router.put('/:id/start', startSession);
-router.put('/:id/complete', completeRequest);
-router.put('/:id/cancel', cancelRequest);
-router.put('/:id/reassign', reassignRequest);
+router.put('/:id/accept', authorize('faculty'), acceptRequest);
+router.put('/:id/reject', authorize('faculty'), rejectRequest);
+router.put('/:id/schedule', authorize('faculty'), scheduleRequest);
+router.put('/:id/start', authorize('faculty'), startSession);
+router.put('/:id/complete', authorize('faculty'), completeRequest);
+router.put('/:id/cancel', authorize('student', 'admin'), cancelRequest);
+router.put('/:id/reassign', authorize('admin'), reassignRequest);
 
 export default router;

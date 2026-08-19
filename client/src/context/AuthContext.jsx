@@ -58,7 +58,7 @@ export const AuthProvider = ({ children }) => {
             id: `u_${Date.now()}`,
             _id: `u_${Date.now()}`,
             name: formData.name || 'New User',
-            role: formData.role || 'student',
+            role: 'student',
             email: formData.email
           };
           const demoData = { token: 'demo-jwt-token-xyz', user: demoUser };

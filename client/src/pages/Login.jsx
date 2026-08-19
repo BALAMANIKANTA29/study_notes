@@ -20,7 +20,7 @@ export default function Login() {
         await login(form.email, form.password);
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Authentication failed. Using local mode.');
+      setError(err.response?.data?.message || err.message || 'Unable to connect to authentication server. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -60,19 +60,6 @@ export default function Login() {
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                 />
               </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Account Role</label>
-                <select
-                  className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition bg-white"
-                  value={form.role}
-                  onChange={(e) => setForm({ ...form, role: e.target.value })}
-                >
-                  <option value="student">Student</option>
-                  <option value="faculty">Faculty</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
             </>
           )}
 
@@ -109,40 +96,44 @@ export default function Login() {
           </button>
         </form>
 
-        <div className="relative my-6">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-200"></div>
-          </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-white px-3 text-gray-400 font-semibold">Or Quick Demo Login</span>
-          </div>
-        </div>
+        {import.meta.env.VITE_ENABLE_DEMO_MODE === 'true' && (
+          <>
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-200"></div>
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-white px-3 text-gray-400 font-semibold">Or Quick Demo Login</span>
+              </div>
+            </div>
 
-        <div className="grid grid-cols-3 gap-2 mb-6">
-          <button
-            type="button"
-            onClick={() => loginDemoRole('student')}
-            className="flex flex-col items-center justify-center p-2.5 rounded-xl border border-indigo-100 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs transition"
-          >
-            <BookOpen size={16} className="mb-1" /> Student
-          </button>
+            <div className="grid grid-cols-3 gap-2 mb-6">
+              <button
+                type="button"
+                onClick={() => loginDemoRole('student')}
+                className="flex flex-col items-center justify-center p-2.5 rounded-xl border border-indigo-100 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs transition"
+              >
+                <BookOpen size={16} className="mb-1" /> Student
+              </button>
 
-          <button
-            type="button"
-            onClick={() => loginDemoRole('faculty')}
-            className="flex flex-col items-center justify-center p-2.5 rounded-xl border border-purple-100 bg-purple-50 hover:bg-purple-100 text-purple-700 font-semibold text-xs transition"
-          >
-            <UserCheck size={16} className="mb-1" /> Faculty
-          </button>
+              <button
+                type="button"
+                onClick={() => loginDemoRole('faculty')}
+                className="flex flex-col items-center justify-center p-2.5 rounded-xl border border-purple-100 bg-purple-50 hover:bg-purple-100 text-purple-700 font-semibold text-xs transition"
+              >
+                <UserCheck size={16} className="mb-1" /> Faculty
+              </button>
 
-          <button
-            type="button"
-            onClick={() => loginDemoRole('admin')}
-            className="flex flex-col items-center justify-center p-2.5 rounded-xl border border-emerald-100 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-xs transition"
-          >
-            <ShieldCheck size={16} className="mb-1" /> Admin
-          </button>
-        </div>
+              <button
+                type="button"
+                onClick={() => loginDemoRole('admin')}
+                className="flex flex-col items-center justify-center p-2.5 rounded-xl border border-emerald-100 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-xs transition"
+              >
+                <ShieldCheck size={16} className="mb-1" /> Admin
+              </button>
+            </div>
+          </>
+        )}
 
         <p
           onClick={() => {

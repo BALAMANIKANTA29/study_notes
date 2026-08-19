@@ -145,55 +145,76 @@ export const rejectRequest = async (req, res) => {
 };
 
 export const scheduleRequest = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
     if (req.user.role !== 'faculty') return res.status(403).json({ message: 'Only faculty can schedule.' });
     
     const { date, startTime, endTime, agenda } = req.body;
     
-    const ticket = await Ticket.findById(req.params.id);
-    if (!ticket) return res.status(404).json({ message: 'Ticket not found.' });
+    const ticket = await Ticket.findById(req.params.id).session(session);
+    if (!ticket) {
+      await session.abortTransaction();
+      return res.status(404).json({ message: 'Ticket not found.' });
+    }
     
     if (ticket.facultyId.toString() !== req.user._id.toString()) {
+      await session.abortTransaction();
       return res.status(403).json({ message: 'Unauthorized. Not your ticket.' });
     }
     
     if (ticket.status !== 'accepted') {
+      await session.abortTransaction();
       return res.status(400).json({ message: `Cannot schedule ticket in status ${ticket.status}` });
     }
     
-    // Check double booking
-    const startObj = new Date(`${date.split('T')[0]}T${startTime}`);
-    // Simplified conflict check: just exact same faculty, date, startTime, not cancelled
+    if (startTime >= endTime) {
+      await session.abortTransaction();
+      return res.status(400).json({ message: 'endTime must be greater than startTime' });
+    }
+
+    // Check double booking - Strict Overlap Check
+    const targetDate = new Date(date);
+    targetDate.setUTCHours(0,0,0,0); // Normalize date
+
     const conflict = await Appointment.findOne({
       facultyId: req.user._id,
-      date: new Date(date),
-      startTime: startTime,
-      status: { $nin: ['cancelled', 'completed', 'no_show'] }
-    });
+      date: targetDate,
+      status: { $nin: ['cancelled', 'completed', 'no_show'] },
+      $and: [
+        { startTime: { $lt: endTime } },
+        { endTime: { $gt: startTime } }
+      ]
+    }).session(session);
     
     if (conflict) {
-      return res.status(409).json({ message: 'This faculty member is already booked for this time slot.' });
+      await session.abortTransaction();
+      return res.status(409).json({ message: 'This faculty member is already booked for this time slot (Overlap conflict).' });
     }
 
     const roomName = `CampusPortal-${crypto.randomBytes(4).toString('hex')}`;
     const meetingLink = `https://meet.jit.si/${roomName}`;
 
-    const appt = await Appointment.create({
+    const apptResult = await Appointment.create([{
       ticketId: ticket._id,
       studentId: ticket.studentId,
       facultyId: req.user._id,
-      date: new Date(date),
+      date: targetDate,
       startTime,
       endTime,
       agenda: agenda || ticket.title,
       status: 'confirmed',
       meetingLink
-    });
+    }], { session });
+    const appt = apptResult[0];
     
     ticket.status = 'scheduled';
     ticket.appointmentId = appt._id;
-    await ticket.save();
+    await ticket.save({ session });
     
+    await session.commitTransaction();
+    session.endSession();
+
     const populated = await Ticket.findById(ticket._id)
       .populate('studentId facultyId noteId', 'name title')
       .populate('appointmentId');
@@ -207,6 +228,8 @@ export const scheduleRequest = async (req, res) => {
 
     res.json(populated);
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
     res.status(500).json({ message: error.message });
   }
 };
@@ -246,35 +269,46 @@ export const startSession = async (req, res) => {
 };
 
 export const completeRequest = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
     if (req.user.role !== 'faculty') return res.status(403).json({ message: 'Only faculty can complete.' });
     
     const { resolution } = req.body;
     
-    const ticket = await Ticket.findById(req.params.id);
-    if (!ticket) return res.status(404).json({ message: 'Ticket not found.' });
+    const ticket = await Ticket.findById(req.params.id).session(session);
+    if (!ticket) {
+      await session.abortTransaction();
+      return res.status(404).json({ message: 'Ticket not found.' });
+    }
     
     if (ticket.facultyId.toString() !== req.user._id.toString()) {
+      await session.abortTransaction();
       return res.status(403).json({ message: 'Unauthorized. Not your ticket.' });
     }
     
-    if (ticket.status !== 'in_session' && ticket.status !== 'scheduled') {
-      return res.status(400).json({ message: `Cannot complete ticket in status ${ticket.status}` });
+    // STRICT STATE MACHINE: Must be 'in_session', cannot skip straight to 'done' from 'scheduled'
+    if (ticket.status !== 'in_session') {
+      await session.abortTransaction();
+      return res.status(400).json({ message: `Cannot complete ticket. Must be in_session (current status: ${ticket.status})` });
     }
     
     ticket.status = 'done';
     ticket.resolution = resolution;
     ticket.resolvedBy = req.user._id;
     ticket.resolvedAt = new Date();
-    await ticket.save();
+    await ticket.save({ session });
     
     if (ticket.appointmentId) {
       await Appointment.findByIdAndUpdate(ticket.appointmentId, { 
         status: 'completed',
         completedAt: new Date()
-      });
+      }, { session });
     }
     
+    await session.commitTransaction();
+    session.endSession();
+
     const populated = await Ticket.findById(ticket._id)
       .populate('studentId facultyId noteId', 'name title')
       .populate('appointmentId');
@@ -283,6 +317,8 @@ export const completeRequest = async (req, res) => {
     
     res.json(populated);
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
     res.status(500).json({ message: error.message });
   }
 };

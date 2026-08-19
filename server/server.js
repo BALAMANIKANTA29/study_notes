@@ -11,6 +11,9 @@ import resourceRoutes from './routes/resourceRoutes.js';
 import guidanceRoutes from './routes/guidanceRoutes.js';
 import facultyRoutes from './routes/facultyRoutes.js';
 import { protect } from './middleware/auth.js';
+import jwt from 'jsonwebtoken';
+import User from './models/User.js';
+import Ticket from './models/Ticket.js';
 
 dotenv.config();
 
@@ -39,14 +42,19 @@ app.use(express.json({ limit: '10mb' }));
 app.use('/uploads', express.static(uploadsDir));
 app.set('io', io);
 
-// Database Connection with Fallback handling
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/campus-portal';
+const MONGO_URI = process.env.MONGO_URI;
+
+if (!MONGO_URI) {
+  console.error('FATAL ERROR: MONGO_URI is not defined in environment variables.');
+  process.exit(1);
+}
+
 mongoose
   .connect(MONGO_URI)
   .then(() => console.log('MongoDB Connected Successfully'))
   .catch((err) => {
-    console.warn('MongoDB Connection Warning:', err.message);
-    console.warn('Operating in fallback mode or check local MongoDB instance.');
+    console.error('FATAL ERROR: MongoDB Connection Failed:', err.message);
+    process.exit(1);
   });
 
 app.use('/api/auth', authRoutes);
@@ -60,30 +68,73 @@ app.get('/api/health', (req, res) => {
 });
 
 // Socket.io Real-Time Chat Engine
-io.on('connection', (socket) => {
-  console.log(`Socket connected: ${socket.id}`);
+io.use(async (socket, next) => {
+  try {
+    const token = socket.handshake.auth?.token;
+    if (!token) return next(new Error('Authentication required'));
 
-  socket.on('joinRoom', ({ userId, role }) => {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id).select('-password');
+    if (!user) return next(new Error('User not found'));
+
+    socket.user = user;
+    next();
+  } catch (err) {
+    next(new Error('Invalid socket authentication'));
+  }
+});
+
+io.on('connection', (socket) => {
+  console.log(`Socket connected: ${socket.id} (User: ${socket.user._id})`);
+
+  socket.on('joinRoom', () => {
+    // Only trust the server-verified user ID and role
+    const userId = socket.user._id.toString();
+    const role = socket.user.role;
+    
     socket.join(`user:${userId}`);
     if (role === 'faculty') {
       socket.join(`faculty:${userId}`);
     } else if (role === 'admin') {
       socket.join('role:admin');
     }
-    console.log(`User ${userId} joined room`);
+    console.log(`User ${userId} joined their rooms`);
   });
 
-  socket.on('joinTicket', (ticketId) => {
-    socket.join(`ticket:${ticketId}`);
+  socket.on('joinTicket', async (ticketId) => {
+    try {
+      const ticket = await Ticket.findById(ticketId);
+      if (!ticket) return;
+
+      const userIdStr = socket.user._id.toString();
+      const isAdmin = socket.user.role === 'admin';
+      const isStudent = ticket.studentId.toString() === userIdStr;
+      const isFaculty = ticket.facultyId && ticket.facultyId.toString() === userIdStr;
+
+      if (isAdmin || isStudent || isFaculty) {
+        socket.join(`ticket:${ticketId}`);
+        console.log(`User ${userIdStr} joined ticket:${ticketId}`);
+      } else {
+        console.warn(`Unauthorized joinTicket attempt for ticket:${ticketId} by user:${userIdStr}`);
+      }
+    } catch (err) {
+      console.error('Socket joinTicket error:', err);
+    }
   });
 
   socket.on('sendMessage', async (data) => {
     try {
+      const senderId = socket.user._id.toString();
       const Message = (await import('./models/Message.js')).default;
-      const newMsg = await Message.create(data);
-      // Existing chat logic can stay, or migrate to user rooms
-      io.to(data.receiverId).emit('receiveMessage', newMsg);
-      io.to(data.senderId).emit('receiveMessage', newMsg);
+      
+      const newMsg = await Message.create({
+        senderId, // Trust server identity, not client
+        receiverId: data.receiverId,
+        text: data.text
+      });
+      
+      io.to(`user:${data.receiverId}`).emit('receiveMessage', newMsg);
+      io.to(`user:${senderId}`).emit('receiveMessage', newMsg);
     } catch (err) {
       console.error('Socket message error:', err);
     }

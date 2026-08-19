@@ -62,18 +62,6 @@ export const getNotes = async (req, res) => {
   }
 };
 
-export const createTicket = async (req, res) => {
-  try {
-    const ticket = await Ticket.create({
-      ...req.body,
-      studentId: req.user._id
-    });
-    const populated = await ticket.populate('studentId facultyId', 'name');
-    res.status(201).json(populated);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
 
 export const getTickets = async (req, res) => {
   try {
@@ -89,31 +77,6 @@ export const getTickets = async (req, res) => {
   }
 };
 
-export const updateTicketStatus = async (req, res) => {
-  try {
-    const ticket = await Ticket.findByIdAndUpdate(
-      req.params.id,
-      { status: req.body.status },
-      { new: true }
-    ).populate('studentId facultyId', 'name');
-    res.json(ticket);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-export const createAppointment = async (req, res) => {
-  try {
-    const appt = await Appointment.create({
-      ...req.body,
-      studentId: req.user._id
-    });
-    const populated = await appt.populate('studentId facultyId', 'name');
-    res.status(201).json(populated);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
 
 export const getAppointments = async (req, res) => {
   try {
@@ -129,26 +92,6 @@ export const getAppointments = async (req, res) => {
   }
 };
 
-export const updateAppointmentStatus = async (req, res) => {
-  try {
-    const { status } = req.body;
-    const appt = await Appointment.findById(req.params.id);
-    if (!appt) return res.status(404).json({ message: 'Appointment not found' });
-
-    // Auto-generate Jitsi link on confirmation
-    if (status === 'confirmed' && !appt.link) {
-      const roomName = `CampusPortal-${crypto.randomBytes(4).toString('hex')}`;
-      appt.link = `https://meet.jit.si/${roomName}`;
-    }
-
-    appt.status = status;
-    await appt.save();
-    const populated = await appt.populate('studentId facultyId', 'name');
-    res.json(populated);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
 
 export const getMessages = async (req, res) => {
   try {

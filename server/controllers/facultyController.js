@@ -81,6 +81,8 @@ export const getAvailableSlots = async (req, res) => {
       isActive: true
     });
     
+    targetDate.setUTCHours(0,0,0,0);
+
     // Get already booked appointments for that date
     const bookedAppointments = await Appointment.find({
       facultyId: id,
@@ -88,14 +90,52 @@ export const getAvailableSlots = async (req, res) => {
       status: { $nin: ['cancelled', 'completed', 'no_show'] }
     });
     
-    // Basic logic: generate slots based on availabilities and filter out booked ones.
-    // Assuming 30 min slots for simplicity, or just return the availabilities and let frontend pick.
-    // For now, we will return the availabilities and the booked slots, frontend can construct the UI.
-    
-    res.json({
-      availabilities,
-      bookedAppointments: bookedAppointments.map(a => ({ startTime: a.startTime, endTime: a.endTime }))
+    const generateSlots = (startStr, endStr) => {
+      const slots = [];
+      const [startH, startM] = startStr.split(':').map(Number);
+      const [endH, endM] = endStr.split(':').map(Number);
+      
+      let currentH = startH;
+      let currentM = startM;
+      
+      while (currentH < endH || (currentH === endH && currentM < endM)) {
+        const nextM = currentM + 30;
+        const h = currentH + Math.floor(nextM / 60);
+        const m = nextM % 60;
+        
+        if (h > endH || (h === endH && m > endM)) break;
+
+        const formatTime = (hh, mm) => `${hh.toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')}`;
+        
+        const slotStart = formatTime(currentH, currentM);
+        const slotEnd = formatTime(h, m);
+        slots.push({ startTime: slotStart, endTime: slotEnd });
+        
+        currentH = h;
+        currentM = m;
+      }
+      return slots;
+    };
+
+    let allAvailableSlots = [];
+    availabilities.forEach(av => {
+      allAvailableSlots = allAvailableSlots.concat(generateSlots(av.startTime, av.endTime));
     });
+
+    const isOverlap = (slotStart, slotEnd, bookedStart, bookedEnd) => {
+      return (slotStart < bookedEnd && slotEnd > bookedStart);
+    };
+
+    const finalSlots = allAvailableSlots.filter(slot => {
+      for (const appt of bookedAppointments) {
+        if (isOverlap(slot.startTime, slot.endTime, appt.startTime, appt.endTime)) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    res.json(finalSlots);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
