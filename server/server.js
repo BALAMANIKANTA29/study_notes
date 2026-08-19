@@ -42,16 +42,25 @@ app.use(express.json({ limit: '10mb' }));
 app.use('/uploads', express.static(uploadsDir));
 app.set('io', io);
 
-const MONGO_URI = process.env.MONGO_URI;
+import { MongoMemoryServer } from 'mongodb-memory-server';
 
-if (!MONGO_URI) {
-  console.error('FATAL ERROR: MONGO_URI is not defined in environment variables.');
-  process.exit(1);
+let MONGO_URI = process.env.MONGO_URI;
+
+// If they don't have Atlas, spin up an in-memory database
+if (!MONGO_URI || MONGO_URI.includes('127.0.0.1') || MONGO_URI.includes('localhost')) {
+  console.log('Starting in-memory MongoDB server (mongodb-memory-server)...');
+  try {
+    const mongoServer = await MongoMemoryServer.create();
+    MONGO_URI = mongoServer.getUri();
+  } catch (err) {
+    console.error('FATAL ERROR: Failed to start in-memory MongoDB:', err.message);
+    process.exit(1);
+  }
 }
 
 mongoose
   .connect(MONGO_URI)
-  .then(() => console.log('MongoDB Connected Successfully'))
+  .then(() => console.log('MongoDB Connected Successfully:', MONGO_URI))
   .catch((err) => {
     console.error('FATAL ERROR: MongoDB Connection Failed:', err.message);
     process.exit(1);
