@@ -1,0 +1,8 @@
+{
+  "name": "study-notes-platform",
+  "version": "1.0.0",
+  "scripts": {
+    "install:all": "cd server && npm install && cd ../client && npm install",
+    "dev": "npx concurrently \"cd server && npm run dev\" \"cd client && npm run dev\""
+  }
+}

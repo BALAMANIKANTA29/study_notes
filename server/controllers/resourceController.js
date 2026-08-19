@@ -36,7 +36,8 @@ export const uploadNote = [
       if (!req.file) {
         return res.status(400).json({ message: 'Please upload a PDF file' });
       }
-      const fileUrl = `http://localhost:5000/uploads/${req.file.filename}`;
+      const baseUrl = process.env.SERVER_PUBLIC_URL || 'http://localhost:5000';
+      const fileUrl = `${baseUrl}/uploads/${req.file.filename}`;
       const note = await Note.create({
         title: req.body.title || 'Untitled Note',
         subject: req.body.subject || 'General',
@@ -179,7 +180,7 @@ export const getAnalytics = async (req, res) => {
   try {
     const totalUsers = await User.countDocuments();
     const totalTickets = await Ticket.countDocuments();
-    const resolvedTickets = await Ticket.countDocuments({ status: 'resolved' });
+    const resolvedTickets = await Ticket.countDocuments({ status: 'done' });
     const pendingAppts = await Appointment.countDocuments({ status: 'pending' });
 
     res.json({

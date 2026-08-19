@@ -24,45 +24,51 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  const login = async (email, password) => {
-    try {
-      const { data } = await api.post('/auth/login', { email, password });
-      setUser(data.user);
-      localStorage.setItem('user', JSON.stringify(data));
-      return data;
-    } catch (error) {
-      // Fallback demo login if server endpoint unreachable or demo credentials used
-      let role = 'student';
-      if (email.includes('faculty') || email.includes('kevin')) role = 'faculty';
-      if (email.includes('admin')) role = 'admin';
-      const demoUser = MOCK_DEMO_USERS[role] || { id: 'demo1', _id: 'demo1', name: 'Demo User', role, email };
-      const demoData = { token: 'demo-jwt-token-xyz', user: demoUser };
-      setUser(demoUser);
-      localStorage.setItem('user', JSON.stringify(demoData));
-      return demoData;
-    }
-  };
+    const login = async (email, password) => {
+      try {
+        const { data } = await api.post('/auth/login', { email, password });
+        setUser(data.user);
+        localStorage.setItem('user', JSON.stringify(data));
+        return data;
+      } catch (error) {
+        if (import.meta.env.VITE_ENABLE_DEMO_MODE === 'true') {
+          console.warn("API Error, falling back to DEMO mode");
+          let role = 'student';
+          if (email.includes('faculty') || email.includes('kevin')) role = 'faculty';
+          if (email.includes('admin')) role = 'admin';
+          const demoUser = MOCK_DEMO_USERS[role] || { id: 'demo1', _id: 'demo1', name: 'Demo User', role, email };
+          const demoData = { token: 'demo-jwt-token-xyz', user: demoUser };
+          setUser(demoUser);
+          localStorage.setItem('user', JSON.stringify(demoData));
+          return demoData;
+        }
+        throw new Error(error.response?.data?.message || 'Unable to connect to authentication server. Please try again.');
+      }
+    };
 
-  const register = async (formData) => {
-    try {
-      const { data } = await api.post('/auth/register', formData);
-      setUser(data.user);
-      localStorage.setItem('user', JSON.stringify(data));
-      return data;
-    } catch (error) {
-      const demoUser = {
-        id: `u_${Date.now()}`,
-        _id: `u_${Date.now()}`,
-        name: formData.name || 'New User',
-        role: formData.role || 'student',
-        email: formData.email
-      };
-      const demoData = { token: 'demo-jwt-token-xyz', user: demoUser };
-      setUser(demoUser);
-      localStorage.setItem('user', JSON.stringify(demoData));
-      return demoData;
-    }
-  };
+    const register = async (formData) => {
+      try {
+        const { data } = await api.post('/auth/register', formData);
+        setUser(data.user);
+        localStorage.setItem('user', JSON.stringify(data));
+        return data;
+      } catch (error) {
+        if (import.meta.env.VITE_ENABLE_DEMO_MODE === 'true') {
+          const demoUser = {
+            id: `u_${Date.now()}`,
+            _id: `u_${Date.now()}`,
+            name: formData.name || 'New User',
+            role: formData.role || 'student',
+            email: formData.email
+          };
+          const demoData = { token: 'demo-jwt-token-xyz', user: demoUser };
+          setUser(demoUser);
+          localStorage.setItem('user', JSON.stringify(demoData));
+          return demoData;
+        }
+        throw new Error(error.response?.data?.message || 'Unable to register user.');
+      }
+    };
 
   const loginDemoRole = (role) => {
     const demoUser = MOCK_DEMO_USERS[role] || MOCK_DEMO_USERS.student;
